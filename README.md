@@ -2,6 +2,8 @@
 
 🔗 **[Try the live app](https://b2b-gst-invoice-auditor-qndy3wprwcwrlgfzw6zxc5.streamlit.app)**
 
+<img width="2560" height="3039" alt="B2B-GST-Invoice-Auditor App Screenshot" src="https://github.com/user-attachments/assets/02d1d2d7-23d3-4b80-b512-c862977b6aef" />
+
 A tool that automates data extraction from unstructured Indian B2B invoices and runs instant math and statutory tax compliance audits.
 
 ## What it does
