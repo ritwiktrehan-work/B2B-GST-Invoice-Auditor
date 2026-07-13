@@ -36,18 +36,18 @@ uploaded_file = st.file_uploader("Upload Vendor Invoice (JPEG/PNG)", type=["jpg"
 
 if uploaded_file is not None:
     col_layout_left, col_layout_right = st.columns([1, 1.3])
-    
+
     with col_layout_left:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Invoice Source", use_container_width=True)
-    
+        st.image(image, caption="Uploaded Invoice Source", width="stretch")
+
     with col_layout_right:
-        if st.button("Execute Compliance & Tax Audit", type="primary", use_container_width=True):
-            
+        if st.button("Execute Compliance & Tax Audit", type="primary", width="stretch"):
+
             # CHECK: If no key is configured anywhere, run the Sandbox Simulation instantly
             if DEFAULT_API_KEY == "PASTE_YOUR_NEW_GEMINI_API_KEY_HERE" or not DEFAULT_API_KEY:
                 st.warning("📊 No active API Key gateway detected. Running in Sandbox Demo Mode using cached ledger targets...")
-                
+
                 extracted_data = InvoiceData(
                     vendor_name="WAL-MART INDIA PVT. LTD.",
                     invoice_date="06/07/2026",
@@ -60,26 +60,26 @@ if uploaded_file is not None:
                 )
                 successful_model = "Sandbox-Core-Simulation"
                 error_logs = []
-            
+
             else:
                 # Live Production Routing Mode
                 models_to_try = [
-                    'gemini-3.5-flash',       
-                    'gemini-3.1-flash-lite',  
-                    'gemini-3.1-pro-preview'          
+                    'gemini-3.5-flash',
+                    'gemini-3.1-flash-lite',
+                    'gemini-3.1-pro-preview'
                 ]
-                
+
                 extracted_data = None
                 successful_model = None
                 error_logs = []
-                
+
                 status_placeholder = st.empty()
-                
+
                 for current_model in models_to_try:
                     status_placeholder.info(f"Connecting to data extraction gateway via {current_model}...")
                     try:
                         client = genai.Client(api_key=DEFAULT_API_KEY)
-                        
+
                         response = client.models.generate_content(
                             model=current_model,
                             contents=[image, "Extract all the required financial parameters accurately from this Indian B2B invoice."],
@@ -89,34 +89,34 @@ if uploaded_file is not None:
                                 temperature=0.1
                             ),
                         )
-                        
+
                         extracted_data = InvoiceData.model_validate_json(response.text)
                         successful_model = current_model
-                        break  
-                        
+                        break
+
                     except Exception as model_error:
                         error_msg = f"Track {current_model} encountered an exception: {str(model_error)}"
                         error_logs.append(error_msg)
                         st.warning(f"⚠️ Channel {current_model} bypassed. Hot-swapping to next available track...")
                         continue
-                
+
                 status_placeholder.empty()
-                
+
             # --- Render Dashboard UI Elements ---
             if extracted_data:
                 with st.container():
                     st.subheader("📋 Audit Summary Ledger")
-                    
+
                     is_gstin_valid = validate_gstin(extracted_data.gstin)
                     calculated_total = extracted_data.taxable_value + extracted_data.cgst + extracted_data.sgst + extracted_data.igst
                     variance = round(extracted_data.total_amount - calculated_total, 2)
                     is_math_valid = abs(variance) <= 0.05
-                    
+
                     m_col1, m_col2, m_col3 = st.columns(3)
                     m_col1.metric("Stated Invoice Total", f"₹{extracted_data.total_amount:,.2f}")
                     m_col2.metric("Calculated Total", f"₹{calculated_total:,.2f}")
                     m_col3.metric("Variance", f"₹{variance}", delta=f"{variance} discrepancy" if variance != 0 else None, delta_color="inverse")
-                    
+
                     st.markdown("### ⚖️ Executive Audit Verdict")
                     if is_gstin_valid and is_math_valid:
                         verdict_text = "🟢 COMPLIANT"
@@ -127,7 +127,7 @@ if uploaded_file is not None:
                     else:
                         verdict_text = "🟡 REGULARITY FLAGGED"
                         st.warning(f"{verdict_text}: Math is correct, but Supplier GSTIN format failed structural checks.")
-                        
+
                     with st.expander("📝 View Auditor's File Note (Copy-Paste Ready)", expanded=True):
                         memo_content = f"""**INTERNAL COMPLIANCE MEMORANDUM**
 **Status:** {verdict_text}  
@@ -144,50 +144,9 @@ if uploaded_file is not None:
 
                     st.markdown("### 📋 1. Core Corporate Identifiers")
                     gstin_status = "🟢 Pass (Valid Format)" if is_gstin_valid else "🔴 Fail (Invalid GSTIN Layout)"
-                    
+
                     df_identifiers = pd.DataFrame({
                         "Field": ["Vendor Name", "Invoice Date", "Extracted GSTIN", "GSTIN Struct Status"],
                         "Value": [extracted_data.vendor_name, str(extracted_data.invoice_date), extracted_data.gstin, gstin_status]
                     })
                     st.table(df_identifiers)
-                    
-                    st.markdown("### 🧮 2. Tax Arithmetic Ledger")
-                    df_ledger = pd.DataFrame({
-                        "Tax Component": ["Taxable Base Amount", "CGST", "SGST", "IGST", "Reported Final Total"],
-                        "Amount (INR)": [
-                            f"₹{extracted_data.taxable_value:,.2f}", 
-                            f"₹{extracted_data.cgst:,.2f}", 
-                            f"₹{extracted_data.sgst:,.2f}", 
-                            f"₹{extracted_data.igst:,.2f}", 
-                            f"₹{extracted_data.total_amount:,.2f}"
-                        ]
-                    })
-                    st.table(df_ledger)
-
-                    st.markdown("### 📊 3. Ledger Asset Distribution")
-                    chart_data = pd.DataFrame({
-                        "Components": ["Base Taxable", "CGST", "SGST", "IGST"],
-                        "Values (INR)": [extracted_data.taxable_value, extracted_data.cgst, extracted_data.sgst, extracted_data.igst]
-                    }).set_index("Components")
-                    st.bar_chart(chart_data, color="#1f77b4")
-                    
-                    st.markdown("---")
-                    export_dict = extracted_data.model_dump()
-                    export_dict['gstin_valid'] = is_gstin_valid
-                    export_dict['arithmetic_variance'] = variance
-                    export_df = pd.DataFrame([export_dict])
-                    
-                    csv_data = export_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Export Audit Record to CSV/Excel Ledger",
-                        data=csv_data,
-                        file_name=f"Audit_Report_{extracted_data.vendor_name.replace(' ', '_')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-                    st.caption(f"Audit Cycle Concluded Successfully (Routed via active infrastructure pipeline: {successful_model}).")
-            else:
-                st.error("❌ High Availability Failure: All configured AI engine clusters are structurally congested or experiencing timeouts.")
-                with st.expander("View System Error Context Log"):
-                    for log in error_logs:
-                        st.text(log)
