@@ -22,3 +22,6 @@ Manually checking GST invoices for math errors and compliance issues is tedious 
 
 ## Status
 Actively in development. Deployed via Streamlit Cloud.
+
+## Development note
+Built with AI-assisted development (Claude) for implementation, based on my own requirements and domain knowledge of GST compliance rules.
