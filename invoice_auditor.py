@@ -8,12 +8,13 @@ from google.genai import types
 
 st.set_page_config(page_title="Enterprise GST Auditor", layout="wide")
 
-# Securely attempt to pull from secrets; automatically fall back if running locally
+# Securely attempt to pull from secrets; this is the shared key that lets
+# every visitor use the app with zero setup. It's never shown to visitors.
 try:
     DEFAULT_API_KEY = st.secrets["GEMINI_API_KEY"]
 except Exception:
-    DEFAULT_API_KEY = "PASTE_YOUR_NEW_GEMINI_API_KEY_HERE"
-    
+    DEFAULT_API_KEY = None
+
 class InvoiceData(BaseModel):
     vendor_name: str = Field(description="Legal name of the vendor/supplier")
     invoice_date: str = Field(description="Date of the invoice issue")
@@ -32,6 +33,31 @@ st.title("🧾 Institutional B2B Invoice & GST Auditor")
 st.caption("Hybrid AI Extraction & Deterministic Financial Auditing Ledger")
 st.markdown("---")
 
+# ---------------------------------------------------------------------------
+# SIDEBAR: optional visitor-supplied API key. Most visitors never need this —
+# the shared key (from secrets) covers everyone by default. This is just a
+# fallback in case that key ever hits its free-tier rate limit.
+# ---------------------------------------------------------------------------
+user_key = ""
+with st.sidebar.expander("⚙️ Advanced: use your own API key"):
+    st.caption(
+        "This app already works out of the box. Only use this if you hit a "
+        "rate-limit error, or want to use your own Gemini quota."
+    )
+    user_key = st.text_input(
+        "Your Gemini API key",
+        type="password",
+        help="Get a free key at aistudio.google.com/apikey.",
+    )
+
+active_key = user_key.strip() or DEFAULT_API_KEY
+
+if not active_key:
+    st.sidebar.info(
+        "ℹ️ No API key configured. Running in Sandbox Demo Mode with cached "
+        "sample data. Open 'Advanced' above and add a key to run real audits."
+    )
+
 uploaded_file = st.file_uploader("Upload Vendor Invoice (JPEG/PNG)", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
@@ -45,7 +71,7 @@ if uploaded_file is not None:
         if st.button("Execute Compliance & Tax Audit", type="primary", use_container_width=True):
             
             # CHECK: If no key is configured anywhere, run the Sandbox Simulation instantly
-            if DEFAULT_API_KEY == "PASTE_YOUR_NEW_GEMINI_API_KEY_HERE" or not DEFAULT_API_KEY:
+            if not active_key:
                 st.warning("📊 No active API Key gateway detected. Running in Sandbox Demo Mode using cached ledger targets...")
                 
                 extracted_data = InvoiceData(
@@ -78,7 +104,7 @@ if uploaded_file is not None:
                 for current_model in models_to_try:
                     status_placeholder.info(f"Connecting to data extraction gateway via {current_model}...")
                     try:
-                        client = genai.Client(api_key=DEFAULT_API_KEY)
+                        client = genai.Client(api_key=active_key)
                         
                         response = client.models.generate_content(
                             model=current_model,
